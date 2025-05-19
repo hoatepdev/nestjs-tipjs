@@ -5,10 +5,16 @@ import {
   UploadedFile,
   UploadedFiles,
   BadRequestException,
+  Body,
+  Query,
+  Get,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import * as fs from 'fs';
+import { Response } from 'express';
 
 @Controller('upload')
 export class UploadController {
@@ -86,5 +92,75 @@ export class UploadController {
         size: file.size,
       })),
     };
+  }
+
+  @Post('large')
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      dest: 'uploads',
+    }),
+  )
+  uploadLargeFiles(
+    @UploadedFiles() files: Array<Express.Multer.File>,
+    @Body() body: { name: string },
+  ) {
+    // 1. get file name
+    const fileName = body.name.replace(/(-\d+)$/, '') || body.name;
+    const nameDir = 'uploads/chunk-' + fileName;
+
+    // 2. make folder name
+    if (!fs.existsSync(nameDir)) {
+      fs.mkdirSync(nameDir);
+    }
+
+    // 3. copy file chunk to folder
+    fs.cpSync(files[0].path, nameDir + '/' + body.name);
+
+    // 4. remove file chunk
+    fs.rmSync(files[0].path);
+  }
+
+  // /upload/merge?file=chunk-69087-pexels-hsapir-1054666.jpg
+  @Get('merge')
+  // merge file
+  mergeFile(
+    @Query('file') fileName: string,
+    @Res()
+    res: Response,
+  ) {
+    const nameDir = 'uploads/' + fileName;
+    const files = fs.readdirSync(nameDir);
+
+    let startPos = 0,
+      countFile = 0;
+    files.map((file): any => {
+      const filePath = nameDir + '/' + file;
+      const streamFile = fs.createReadStream(filePath);
+      streamFile
+        .pipe(
+          fs.createWriteStream('uploads/merge/' + fileName, {
+            start: startPos,
+          }),
+        )
+        .on('finish', () => {
+          countFile++;
+          if (files.length === countFile) {
+            fs.rm(
+              nameDir,
+              {
+                recursive: true,
+              },
+              () => {},
+            );
+            countFile = 0;
+          }
+        });
+
+      startPos += fs.statSync(filePath).size;
+    });
+    return res.json({
+      link: `http://localhost:3000/uploads/merge/${fileName}`,
+      fileName,
+    });
   }
 }

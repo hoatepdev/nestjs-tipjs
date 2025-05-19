@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  </head>
+  <body>
+    <h1>Upload</h1>
+    <form id="uploadForm">
+      <input id="fileInput" type="file" multiple />
+      <button type="submit">Upload</button>
+    </form>
+    <!-- <textarea id="result"></textarea> -->
+    <script>
+      const form = document.getElementById('uploadForm');
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        const fileInput = document.getElementById('fileInput');
+
+        const chunkSize = 140 * 1024; // 140kb
+
+        const file = fileInput.files[0],
+          chunks = [],
+          chunksPromise = [];
+        let startPos = 0;
+        while (startPos < file.size) {
+          chunks.push(file.slice(startPos, startPos + chunkSize));
+          startPos += chunkSize;
+        }
+
+        if (!chunks.length) {
+          return;
+        }
+
+        const fileNameRandom = Math.random().toString().slice(2, 7);
+
+        chunks.map((ck, index) => {
+          // multipart/formdata
+          const data = new FormData();
+          const nameFileFinal = fileNameRandom + '-' + file.name + '-' + index;
+          data.set('name', nameFileFinal);
+          data.append('files', ck);
+          chunksPromise.push(
+            axios.post('http://localhost:3000/upload/large', data),
+          );
+        });
+
+        // call api
+        await Promise.all(chunksPromise);
+        const rs = await axios.get(
+          'http://localhost:3000/upload/merge?file=chunk-' +
+            fileNameRandom +
+            '-' +
+            file.name,
+        );
+        console.log('⭐ rs.link)', rs.data.link);
+
+        window.open(rs.data.link);
+      });
+    </script>
+  </body>
+</html>
