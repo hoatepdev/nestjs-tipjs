@@ -7,6 +7,8 @@ export class AppController {
 
   @Get()
   getHello(): string {
+    console.log('⭐ get Hello 12c');
+
     return this.appService.getHello();
   }
 }
